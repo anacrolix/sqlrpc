@@ -16,9 +16,9 @@ func init() {
 type rpcsqlDriver struct{}
 
 type Server struct {
-	DB     *sql.DB
-	refs   []interface{}
-	refOff int
+	DB      *sql.DB
+	refs    map[int]interface{}
+	nextRef int
 }
 
 type Client struct {
@@ -50,19 +50,32 @@ func (me *Client) Call(method string, args, reply interface{}) (err error) {
 	return
 }
 
-func (me *Server) newRef(obj interface{}) int {
-	me.refs = append(me.refs, obj)
-	return me.refOff + len(me.refs) - 1
+func (me *Server) newRef(obj interface{}) (ret int) {
+	if me.refs == nil {
+		me.refs = make(map[int]interface{})
+	}
+	for {
+		if _, ok := me.refs[me.nextRef]; !ok {
+			break
+		}
+		me.nextRef++
+	}
+	me.refs[me.nextRef] = obj
+	ret = me.nextRef
+	me.nextRef++
+	log.Print(len(me.refs))
+	return
 }
 
 func (me *Server) popRef(id int) (ret interface{}) {
-	ret = me.refs[id-me.refOff]
-	me.refs[id-me.refOff] = nil
+	ret = me.refs[id]
+	delete(me.refs, id)
+	log.Print(len(me.refs))
 	return
 }
 
 func (me *Server) ref(id int) (ret interface{}) {
-	return me.refs[id-me.refOff]
+	return me.refs[id]
 }
 
 func (me *Server) Begin(args struct{}, txId *int) (err error) {
@@ -96,12 +109,11 @@ func (me *Server) Query(args ExecArgs, reply *RowsReply) (err error) {
 	}
 	reply.RowsId = me.newRef(rows)
 	reply.Columns, err = rows.Columns()
-	log.Print(reply.Columns)
 	return
 }
 
 func (me *Server) RowsClose(rowsId int, reply *interface{}) (err error) {
-	err = me.ref(rowsId).(*sql.Rows).Close()
+	err = me.popRef(rowsId).(*sql.Rows).Close()
 	log.Printf("RowsClose: %s", err)
 	return
 }
@@ -124,7 +136,6 @@ func (me *Server) ExecStmt(args ExecArgs, reply *ResultReply) (err error) {
 
 func (me *Server) RowsNext(args RowsNextArgs, reply *[]interface{}) (err error) {
 	rows := me.ref(args.RowsRef).(*sql.Rows)
-	log.Print(args.NumValues)
 	vals := make([]interface{}, args.NumValues)
 	dest := make([]interface{}, args.NumValues)
 	for i := range iter.N(args.NumValues) {
@@ -132,7 +143,6 @@ func (me *Server) RowsNext(args RowsNextArgs, reply *[]interface{}) (err error) 
 	}
 	if rows.Next() {
 		err = rows.Scan(dest...)
-		log.Print(vals)
 		*reply = vals
 		return
 	}
@@ -141,7 +151,7 @@ func (me *Server) RowsNext(args RowsNextArgs, reply *[]interface{}) (err error) 
 }
 
 func (me *Server) CloseStmt(stmtRef int, reply *struct{}) (err error) {
-	err = me.ref(stmtRef).(*sql.Stmt).Close()
+	err = me.popRef(stmtRef).(*sql.Stmt).Close()
 	log.Printf("CloseStmt: %s", err)
 	return
 }
