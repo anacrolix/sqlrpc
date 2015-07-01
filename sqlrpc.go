@@ -3,6 +3,7 @@ package sqlrpc
 import (
 	"database/sql"
 	"database/sql/driver"
+	"io"
 	"log"
 	"net/rpc"
 
@@ -147,6 +148,9 @@ func (me *Server) RowsNext(args RowsNextArgs, reply *[]interface{}) (err error) 
 		return
 	}
 	err = rows.Err()
+	if err == nil {
+		err = io.EOF
+	}
 	return
 }
 
