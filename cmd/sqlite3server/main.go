@@ -14,6 +14,7 @@ import (
 )
 
 func main() {
+	log.SetFlags(log.Flags() | log.Lshortfile)
 	dsn := flag.String("dsn", "", "sqlite3 dsn")
 	flag.Parse()
 	db, err := sql.Open("sqlite3", *dsn)
