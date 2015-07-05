@@ -15,7 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var serverAddr string
+var (
+	serverAddr string
+	server     *Server
+)
 
 func init() {
 	rpc.HandleHTTP()
@@ -23,8 +26,8 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	s := Server{DB: backendDB}
-	err = rpc.Register(&s)
+	server = &Server{DB: backendDB}
+	err = rpc.Register(server)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -77,11 +80,11 @@ func TestSimple(t *testing.T) {
 	}
 	ra, _ = res.RowsAffected()
 	assert.EqualValues(t, 1, ra)
+	assert.Equal(t, 0, len(server.refs))
 }
 
 func TestDatabaseLocked(t *testing.T) {
 	db, _ := sql.Open("sqlrpc", serverAddr)
-	// db.SetMaxOpenConns(1)
 	defer db.Close()
 	db.Exec("create table a(b)")
 	tx, _ := db.Begin()
@@ -110,7 +113,18 @@ func TestDatabaseLocked(t *testing.T) {
 		t.Fatalf("%#v", err)
 	}
 	var b int
-	db.QueryRow("select b from a").Scan(&b)
+	rows, err := db.Query("select b from a")
+	assert.Nil(t, err)
+	cols, err := rows.Columns()
+	assert.Nil(t, err)
+	assert.EqualValues(t, []string{"b"}, cols)
+	for rows.Next() {
+		assert.Nil(t, rows.Scan(&b))
+	}
+	assert.Nil(t, rows.Err())
+	rows.Close()
 	assert.EqualValues(t, 43, b)
 	assert.Nil(t, db.Close())
+	time.Sleep(11 * time.Millisecond)
+	assert.Equal(t, 0, len(server.refs))
 }

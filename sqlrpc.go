@@ -64,14 +64,12 @@ func (me *Server) newRef(obj interface{}) (ret int) {
 	me.refs[me.nextRef] = obj
 	ret = me.nextRef
 	me.nextRef++
-	log.Print(len(me.refs))
 	return
 }
 
 func (me *Server) popRef(id int) (ret interface{}) {
 	ret = me.refs[id]
 	delete(me.refs, id)
-	log.Print(len(me.refs))
 	return
 }
 
@@ -115,7 +113,6 @@ func (me *Server) Query(args ExecArgs, reply *RowsReply) (err error) {
 
 func (me *Server) RowsClose(rowsId int, reply *interface{}) (err error) {
 	err = me.popRef(rowsId).(*sql.Rows).Close()
-	log.Printf("RowsClose: %s", err)
 	return
 }
 
@@ -156,7 +153,6 @@ func (me *Server) RowsNext(args RowsNextArgs, reply *[]interface{}) (err error) 
 
 func (me *Server) CloseStmt(stmtRef int, reply *struct{}) (err error) {
 	err = me.popRef(stmtRef).(*sql.Stmt).Close()
-	log.Printf("CloseStmt: %s", err)
 	return
 }
 
