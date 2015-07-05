@@ -132,21 +132,20 @@ func (me *Server) ExecStmt(args ExecArgs, reply *ResultReply) (err error) {
 	return
 }
 
-func (me *Server) RowsNext(args RowsNextArgs, reply *[]interface{}) (err error) {
+func (me *Server) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error) {
 	rows := me.ref(args.RowsRef).(*sql.Rows)
-	vals := make([]interface{}, args.NumValues)
+	reply.Values = make([]interface{}, args.NumValues)
 	dest := make([]interface{}, args.NumValues)
 	for i := range iter.N(args.NumValues) {
-		dest[i] = &vals[i]
+		dest[i] = &reply.Values[i]
 	}
 	if rows.Next() {
 		err = rows.Scan(dest...)
-		*reply = vals
 		return
 	}
 	err = rows.Err()
 	if err == nil {
-		err = io.EOF
+		reply.EOF = true
 	}
 	return
 }
@@ -239,16 +238,24 @@ type RowsNextArgs struct {
 	NumValues int
 }
 
+type RowsNextReply struct {
+	Values []interface{}
+	EOF    bool
+}
+
 func (me *rows) Next(dest []driver.Value) (err error) {
-	vals := make([]interface{}, len(dest))
+	var reply RowsNextReply
 	err = me.cl.Call("Server.RowsNext", RowsNextArgs{
 		me.rr.RowsId,
 		len(me.Columns()),
-	}, &vals)
+	}, &reply)
 	if err != nil {
 		return
 	}
-	for i, v := range vals {
+	if reply.EOF {
+		return io.EOF
+	}
+	for i, v := range reply.Values {
 		dest[i] = v
 	}
 	return
