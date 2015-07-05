@@ -125,6 +125,32 @@ func TestDatabaseLocked(t *testing.T) {
 	rows.Close()
 	assert.EqualValues(t, 43, b)
 	assert.Nil(t, db.Close())
-	time.Sleep(11 * time.Millisecond)
+	time.Sleep(12 * time.Millisecond)
 	assert.Equal(t, 0, len(server.refs))
+}
+
+func Benchmark(b *testing.B) {
+	db, _ := sql.Open("sqlrpc", serverAddr)
+	defer db.Close()
+	db.Exec("drop table if exists a")
+	db.Exec("create table a(b)")
+	for range iter.N(b.N) {
+		for i := range iter.N(10) {
+			db.Exec("insert into a values (?)", i)
+		}
+		rows, _ := db.Query("select * from a where b < ?", 3)
+		var count int
+		for rows.Next() {
+			var b int
+			rows.Scan(&b)
+			if b < 3 {
+				count++
+			}
+		}
+		assert.Nil(b, rows.Err())
+		assert.EqualValues(b, 3, count)
+		rows.Close()
+		db.Exec("delete from a")
+	}
+	assert.Equal(b, 0, len(server.refs))
 }
