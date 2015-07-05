@@ -36,17 +36,8 @@ func (me *Client) Call(method string, args, reply interface{}) (err error) {
 	if err != nil {
 		log.Printf("first %s call error: %s", method, err)
 	}
-	if err != rpc.ErrShutdown {
-		return
-	}
-	me.rpcCl.Close()
-	me.rpcCl, err = rpc.DialHTTP("tcp", me.address)
-	if err != nil {
-		return
-	}
-	err = me.rpcCl.Call(method, args, reply)
-	if err != nil {
-		log.Printf("second %s call error: %s", method, err)
+	if err == rpc.ErrShutdown {
+		err = driver.ErrBadConn
 	}
 	return
 }
