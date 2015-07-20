@@ -126,7 +126,9 @@ func TestDatabaseLocked(t *testing.T) {
 	assert.EqualValues(t, 43, b)
 	assert.Nil(t, db.Close())
 	time.Sleep(12 * time.Millisecond)
+	server.mu.Lock()
 	assert.Equal(t, 0, len(server.refs))
+	server.mu.Unlock()
 }
 
 func Benchmark(b *testing.B) {
