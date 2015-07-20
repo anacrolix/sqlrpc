@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/rpc"
+	"sync"
 
 	"github.com/bradfitz/iter"
 )
@@ -17,7 +18,9 @@ func init() {
 type rpcsqlDriver struct{}
 
 type Server struct {
-	DB      *sql.DB
+	DB *sql.DB
+
+	mu      sync.Mutex
 	refs    map[int]interface{}
 	nextRef int
 }
@@ -43,6 +46,7 @@ func (me *Client) Call(method string, args, reply interface{}) (err error) {
 }
 
 func (me *Server) newRef(obj interface{}) (ret int) {
+	me.mu.Lock()
 	if me.refs == nil {
 		me.refs = make(map[int]interface{})
 	}
@@ -55,17 +59,23 @@ func (me *Server) newRef(obj interface{}) (ret int) {
 	me.refs[me.nextRef] = obj
 	ret = me.nextRef
 	me.nextRef++
+	me.mu.Unlock()
 	return
 }
 
 func (me *Server) popRef(id int) (ret interface{}) {
+	me.mu.Lock()
 	ret = me.refs[id]
 	delete(me.refs, id)
+	me.mu.Unlock()
 	return
 }
 
 func (me *Server) ref(id int) (ret interface{}) {
-	return me.refs[id]
+	me.mu.Lock()
+	ret = me.refs[id]
+	me.mu.Unlock()
+	return
 }
 
 func (me *Server) Begin(args struct{}, txId *int) (err error) {
