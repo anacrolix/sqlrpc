@@ -1,3 +1,6 @@
+/*
+Package sqlrpc provides an RPC server that exposes a `database/sql.*DB`, and a SQL driver that can connect to it. Any `database/sql.*DB` can be exposed, but the primary motivation is to expose the excellent SQLite3. `cmd/sqlite3server` is provided for this purpose, and can easily be adapted to other DBs.
+*/
 package sqlrpc
 
 import (
