@@ -21,7 +21,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(1)
 	s := sqlrpc.Server{DB: db}
 	rpc.Register(&s)
 	rpc.HandleHTTP()
