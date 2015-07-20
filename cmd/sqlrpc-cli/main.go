@@ -46,7 +46,14 @@ func main() {
 				}
 				v := *dest[i].(*interface{})
 				if v != nil {
-					fmt.Printf("%s", v)
+					fmt.Printf(func() string {
+						switch v.(type) {
+						case []byte:
+							return "%s"
+						default:
+							return "%v"
+						}
+					}(), v)
 				}
 			}
 			fmt.Printf("\n")
