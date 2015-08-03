@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"io"
-	"log"
 	"net/rpc"
 	"sync"
 
@@ -39,9 +38,6 @@ func (me *Client) Close() error {
 
 func (me *Client) Call(method string, args, reply interface{}) (err error) {
 	err = me.rpcCl.Call(method, args, reply)
-	if err != nil {
-		log.Printf("first %s call error: %s", method, err)
-	}
 	if err == rpc.ErrShutdown {
 		err = driver.ErrBadConn
 	}
