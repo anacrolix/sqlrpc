@@ -15,6 +15,8 @@ type rpcsqlDriver struct{}
 
 type conn struct {
 	client *Client
+	txId   int
+	inTx   bool
 }
 
 func (me rpcsqlDriver) Open(name string) (ret driver.Conn, err error) {
@@ -22,7 +24,9 @@ func (me rpcsqlDriver) Open(name string) (ret driver.Conn, err error) {
 	if err != nil {
 		return
 	}
-	conn := &conn{&Client{cl, name}}
+	conn := &conn{
+		client: &Client{cl, name},
+	}
 	ret = conn
 	return
 }
@@ -36,6 +40,8 @@ func (me *conn) Begin() (ret driver.Tx, err error) {
 	if err != nil {
 		return
 	}
+	me.txId = txId
+	me.inTx = true
 	ret = &tx{txId, me}
 	return
 }
@@ -45,12 +51,22 @@ type tx struct {
 	conn *conn
 }
 
-func (me *tx) Commit() error {
-	return me.conn.client.Call("Server.Commit", me.id, nil)
+func (me *tx) Commit() (err error) {
+	if !me.conn.inTx {
+		panic("not in tx")
+	}
+	err = me.conn.client.Call("Server.Commit", me.id, nil)
+	me.conn.inTx = false
+	return
 }
 
-func (me *tx) Rollback() error {
-	return me.conn.client.Call("Server.Rollback", me.id, nil)
+func (me *tx) Rollback() (err error) {
+	if !me.conn.inTx {
+		panic("not in tx")
+	}
+	err = me.conn.client.Call("Server.Rollback", me.id, nil)
+	me.conn.inTx = false
+	return
 }
 
 func (me *conn) Close() (err error) {
@@ -148,10 +164,10 @@ func (me *stmt) Exec(args []driver.Value) (ret driver.Result, err error) {
 
 func (me *conn) Prepare(query string) (ret driver.Stmt, err error) {
 	var ref int
-	err = me.client.Call("Server.Prepare", query, &ref)
-	if err == rpc.ErrShutdown {
-		err = driver.ErrBadConn
-	}
+	err = me.client.Call(
+		"Server.Prepare",
+		PrepareArgs{query, me.txId, me.inTx},
+		&ref)
 	if err != nil {
 		return
 	}

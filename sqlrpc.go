@@ -36,3 +36,9 @@ type ResultReply struct {
 	RowsAffected    int64
 	RowsAffectedErr error
 }
+
+type PrepareArgs struct {
+	Query string
+	TxId  int
+	InTx  bool
+}

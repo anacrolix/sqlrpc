@@ -62,8 +62,16 @@ func (me *Server) Commit(txId int, reply *struct{}) (err error) {
 	return tx.Commit()
 }
 
-func (me *Server) Prepare(query string, stmtRef *int) (err error) {
-	stmt, err := me.DB.Prepare(query)
+func (me *Server) Prepare(args PrepareArgs, stmtRef *int) (err error) {
+	var ppr interface {
+		Prepare(string) (*sql.Stmt, error)
+	}
+	if args.InTx {
+		ppr = me.ref(args.TxId).(*sql.Tx)
+	} else {
+		ppr = me.DB
+	}
+	stmt, err := ppr.Prepare(args.Query)
 	if err != nil {
 		return
 	}
