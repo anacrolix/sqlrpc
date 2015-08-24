@@ -34,9 +34,6 @@ func (me rpcsqlDriver) Open(name string) (ret driver.Conn, err error) {
 func (me *conn) Begin() (ret driver.Tx, err error) {
 	var txId int
 	err = me.client.Call("Server.Begin", struct{}{}, &txId)
-	if err == rpc.ErrShutdown {
-		err = driver.ErrBadConn
-	}
 	if err != nil {
 		return
 	}
