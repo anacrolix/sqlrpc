@@ -13,6 +13,7 @@ import (
 	"github.com/bradfitz/iter"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -26,6 +27,7 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	backendDB.SetMaxOpenConns(1)
 	server = &Server{DB: backendDB}
 	err = rpc.Register(server)
 	if err != nil {
@@ -37,6 +39,26 @@ func init() {
 	}
 	serverAddr = l.Addr().String()
 	go http.Serve(l, nil)
+}
+
+// Shows that transactions tie up a connection. The server.DB should have a
+// connection limit of 1.
+func TestConcurrentTransactionsSQLite(t *testing.T) {
+	started := time.Now()
+	tx1, _ := server.DB.Begin()
+	t.Log(time.Since(started))
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		tx1.Rollback()
+	}()
+	started = time.Now()
+	tx2, _ := server.DB.Begin()
+	tx2.Rollback()
+	took := time.Since(started)
+	t.Log(took)
+	if took < 10*time.Millisecond {
+		t.Fatal("transactions did not lock each other out")
+	}
 }
 
 func TestPing(t *testing.T) {
@@ -83,11 +105,38 @@ func TestSimple(t *testing.T) {
 	assert.Equal(t, 0, len(server.refs))
 }
 
+func TestTransactionSingleConnection(t *testing.T) {
+	db, _ := sql.Open("sqlrpc", serverAddr)
+	defer db.Close()
+	db.Exec("drop table if exists a")
+	tx, _ := db.Begin()
+	tx.Exec("create table a(b)")
+	tx.Exec("insert into a values(?)", 1)
+	row := tx.QueryRow("select * from a where b < ?", 2)
+	var i int
+	row.Scan(&i)
+	require.EqualValues(t, 1, i)
+	tx.Exec("insert into a values(?)", 2)
+	rows, _ := tx.Query("select b from a where b > ?", 0)
+	cols, _ := rows.Columns()
+	require.EqualValues(t, []string{"b"}, cols)
+	require.True(t, rows.Next())
+	rows.Scan(&i)
+	require.EqualValues(t, 1, i)
+	require.True(t, rows.Next())
+	rows.Scan(&i)
+	require.EqualValues(t, 2, i)
+	require.False(t, rows.Next())
+	tx.Rollback()
+}
+
 func TestDatabaseLocked(t *testing.T) {
 	db, _ := sql.Open("sqlrpc", serverAddr)
 	defer db.Close()
-	db.Exec("create table a(b)")
-	tx, _ := db.Begin()
+	_, err := db.Exec("create table a(b)")
+	require.NoError(t, err)
+	tx, err := db.Begin()
+	require.NoError(t, err)
 	// Lock the database.
 	tx.Exec("insert into a values (42)")
 	// Release the database asynchronously.
@@ -96,7 +145,6 @@ func TestDatabaseLocked(t *testing.T) {
 		tx.Commit()
 	}()
 	started := time.Now()
-	var err error
 	var retries int
 	for retries = range iter.N(100) {
 		// This won't succeed until the other transaction releases its lock.
