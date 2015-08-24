@@ -26,7 +26,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error parsing options: %s", err)
 		os.Exit(2)
 	}
-	log.Print(opts)
 	dsn := opts["--dsn"].(string)
 	db, err := sql.Open("sqlrpc", dsn)
 	if err != nil {
