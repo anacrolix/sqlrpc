@@ -3,9 +3,11 @@ package main
 import (
 	"database/sql"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"net/rpc"
+	"os"
 
 	_ "github.com/anacrolix/envpprof"
 	_ "github.com/mattn/go-sqlite3"
@@ -17,6 +19,10 @@ func main() {
 	log.SetFlags(log.Flags() | log.Lshortfile)
 	dsn := flag.String("dsn", "", "sqlite3 dsn")
 	flag.Parse()
+	if flag.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "unexpected positional arguments\n")
+		os.Exit(2)
+	}
 	db, err := sql.Open("sqlite3", *dsn)
 	if err != nil {
 		log.Fatal(err)
