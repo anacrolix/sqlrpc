@@ -4,24 +4,37 @@ package main
 
 import (
 	"database/sql"
-	"flag"
 	"fmt"
 	"log"
 	"os"
 
+	_ "github.com/anacrolix/envpprof"
+	"github.com/docopt/docopt-go"
+
 	_ "github.com/anacrolix/sqlrpc"
 )
 
+// Multiline strings in Go SUCK.
+const doc = "" +
+	"Usage: sqlrpc-cli [--dsn=<dsn>] <query>...\n" +
+	"Options:\n" +
+	"  --dsn=<dsn> data source name (database connection information)  [default: localhost:6033]"
+
 func main() {
-	dsn := flag.String("dsn", "localhost:6033", "data source name: database connection information")
-	flag.Parse()
-	db, err := sql.Open("sqlrpc", *dsn)
+	opts, err := docopt.Parse(doc, nil, true, "", false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error parsing options: %s", err)
+		os.Exit(2)
+	}
+	log.Print(opts)
+	dsn := opts["--dsn"].(string)
+	db, err := sql.Open("sqlrpc", dsn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error opening database: %s\n", err)
 		os.Exit(1)
 	}
 	defer db.Close()
-	for _, arg := range flag.Args() {
+	for _, arg := range opts["<query>"].([]string) {
 		rows, err := db.Query(arg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error executing sql: %s\n", err)
