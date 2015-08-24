@@ -31,5 +31,5 @@ func main() {
 	s := sqlrpc.Server{DB: db}
 	rpc.Register(&s)
 	rpc.HandleHTTP()
-	http.ListenAndServe(":6033", nil)
+	log.Print(http.ListenAndServe(":6033", nil))
 }
