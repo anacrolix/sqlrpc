@@ -71,6 +71,11 @@ func (me *Server) Commit(txId int, reply *struct{}) (err error) {
 	return tx.Commit()
 }
 
+func (me *Server) Rollback(txId int, reply *struct{}) (err error) {
+	tx := me.popRef(txId).(*sql.Tx)
+	return tx.Rollback()
+}
+
 func (me *Server) Prepare(args PrepareArgs, stmtRef *int) (err error) {
 	var ppr interface {
 		Prepare(string) (*sql.Stmt, error)
