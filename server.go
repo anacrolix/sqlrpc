@@ -2,10 +2,13 @@ package sqlrpc
 
 import (
 	"database/sql"
+	"log"
 	"sync"
 
 	"github.com/bradfitz/iter"
 )
+
+const logRefs = false
 
 type Server struct {
 	DB *sql.DB
@@ -29,6 +32,9 @@ func (me *Server) newRef(obj interface{}) (ret int) {
 	me.refs[me.nextRef] = obj
 	ret = me.nextRef
 	me.nextRef++
+	if logRefs {
+		log.Print(me.refs)
+	}
 	me.mu.Unlock()
 	return
 }
@@ -37,6 +43,9 @@ func (me *Server) popRef(id int) (ret interface{}) {
 	me.mu.Lock()
 	ret = me.refs[id]
 	delete(me.refs, id)
+	if logRefs {
+		log.Print(me.refs)
+	}
 	me.mu.Unlock()
 	return
 }
