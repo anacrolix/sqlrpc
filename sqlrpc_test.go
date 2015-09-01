@@ -22,6 +22,7 @@ var (
 )
 
 func init() {
+	log.SetFlags(log.Flags() | log.Lshortfile)
 	rpc.HandleHTTP()
 	backendDB, err := sql.Open("sqlite3", "file::memory:?cache=shared")
 	if err != nil {
