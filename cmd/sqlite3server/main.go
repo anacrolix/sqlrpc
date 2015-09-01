@@ -15,6 +15,14 @@ import (
 	"github.com/anacrolix/sqlrpc"
 )
 
+func refsHandler(s *sqlrpc.Server) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for ref, val := range s.Refs() {
+			fmt.Fprintf(w, "%d: %#v\n\n", ref, val)
+		}
+	})
+}
+
 func main() {
 	log.SetFlags(log.Flags() | log.Lshortfile)
 	dsn := flag.String("dsn", "", "sqlite3 dsn")
@@ -31,5 +39,6 @@ func main() {
 	s := sqlrpc.Server{DB: db}
 	rpc.Register(&s)
 	rpc.HandleHTTP()
+	http.Handle("/refs", refsHandler(&s))
 	log.Print(http.ListenAndServe(":6033", nil))
 }

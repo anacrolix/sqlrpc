@@ -16,6 +16,15 @@ type Server struct {
 	mu      sync.Mutex
 	refs    map[int]interface{}
 	nextRef int
+
+func (me *Server) Refs() (ret map[int]interface{}) {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	ret = make(map[int]interface{}, len(me.refs))
+	for k, v := range me.refs {
+		ret[k] = v
+	}
+	return
 }
 
 func (me *Server) newRef(obj interface{}) (ret int) {
