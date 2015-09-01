@@ -16,6 +16,7 @@ type Server struct {
 	mu      sync.Mutex
 	refs    map[int]interface{}
 	nextRef int
+}
 
 func (me *Server) Refs() (ret map[int]interface{}) {
 	me.mu.Lock()
