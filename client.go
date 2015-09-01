@@ -25,8 +25,5 @@ func (me *Client) Call(method string, args, reply interface{}) (err error) {
 	if err == rpc.ErrShutdown {
 		err = driver.ErrBadConn
 	}
-	if err != nil {
-		log.Print(err)
-	}
 	return
 }
