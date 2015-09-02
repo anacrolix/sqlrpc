@@ -21,6 +21,7 @@ const doc = "" +
 	"  --dsn=<dsn> data source name (database connection information)  [default: localhost:6033]"
 
 func main() {
+	log.SetFlags(log.Flags() | log.Lshortfile)
 	opts, err := docopt.Parse(doc, nil, true, "", false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error parsing options: %s", err)
