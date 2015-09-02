@@ -15,7 +15,7 @@ import (
 	"github.com/anacrolix/sqlrpc"
 )
 
-func refsHandler(s *sqlrpc.Server) http.Handler {
+func refsHandler(s *sqlrpc.Service) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for ref, val := range s.Refs() {
 			fmt.Fprintf(w, "%d: %#v\n\n", ref, val)
@@ -36,7 +36,7 @@ func main() {
 		log.Fatal(err)
 	}
 	db.SetMaxOpenConns(1)
-	s := sqlrpc.Server{DB: db}
+	s := sqlrpc.Service{DB: db}
 	rpc.Register(&s)
 	rpc.HandleHTTP()
 	http.Handle("/refs", refsHandler(&s))

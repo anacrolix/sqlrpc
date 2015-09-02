@@ -21,7 +21,7 @@ func (me *Client) Call(method string, args, reply interface{}) (err error) {
 	if logCalls {
 		log.Print(method)
 	}
-	err = me.rpcCl.Call(method, args, reply)
+	err = me.rpcCl.Call("Service."+method, args, reply)
 	if err == rpc.ErrShutdown {
 		err = driver.ErrBadConn
 	}

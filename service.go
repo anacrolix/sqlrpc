@@ -10,7 +10,7 @@ import (
 
 const logRefs = false
 
-type Server struct {
+type Service struct {
 	DB *sql.DB
 
 	mu      sync.Mutex
@@ -18,7 +18,7 @@ type Server struct {
 	nextRef int
 }
 
-func (me *Server) Refs() (ret map[int]interface{}) {
+func (me *Service) Refs() (ret map[int]interface{}) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	ret = make(map[int]interface{}, len(me.refs))
@@ -28,7 +28,7 @@ func (me *Server) Refs() (ret map[int]interface{}) {
 	return
 }
 
-func (me *Server) newRef(obj interface{}) (ret int) {
+func (me *Service) newRef(obj interface{}) (ret int) {
 	me.mu.Lock()
 	if me.refs == nil {
 		me.refs = make(map[int]interface{})
@@ -49,7 +49,7 @@ func (me *Server) newRef(obj interface{}) (ret int) {
 	return
 }
 
-func (me *Server) popRef(id int) (ret interface{}) {
+func (me *Service) popRef(id int) (ret interface{}) {
 	me.mu.Lock()
 	ret = me.refs[id]
 	delete(me.refs, id)
@@ -60,14 +60,14 @@ func (me *Server) popRef(id int) (ret interface{}) {
 	return
 }
 
-func (me *Server) ref(id int) (ret interface{}) {
+func (me *Service) ref(id int) (ret interface{}) {
 	me.mu.Lock()
 	ret = me.refs[id]
 	me.mu.Unlock()
 	return
 }
 
-func (me *Server) Begin(args struct{}, txId *int) (err error) {
+func (me *Service) Begin(args struct{}, txId *int) (err error) {
 	tx, err := me.DB.Begin()
 	if err != nil {
 		return
@@ -76,17 +76,17 @@ func (me *Server) Begin(args struct{}, txId *int) (err error) {
 	return
 }
 
-func (me *Server) Commit(txId int, reply *struct{}) (err error) {
+func (me *Service) Commit(txId int, reply *struct{}) (err error) {
 	tx := me.popRef(txId).(*sql.Tx)
 	return tx.Commit()
 }
 
-func (me *Server) Rollback(txId int, reply *struct{}) (err error) {
+func (me *Service) Rollback(txId int, reply *struct{}) (err error) {
 	tx := me.popRef(txId).(*sql.Tx)
 	return tx.Rollback()
 }
 
-func (me *Server) Prepare(args PrepareArgs, stmtRef *int) (err error) {
+func (me *Service) Prepare(args PrepareArgs, stmtRef *int) (err error) {
 	var ppr interface {
 		Prepare(string) (*sql.Stmt, error)
 	}
@@ -103,7 +103,7 @@ func (me *Server) Prepare(args PrepareArgs, stmtRef *int) (err error) {
 	return
 }
 
-func (me *Server) Query(args ExecArgs, reply *RowsReply) (err error) {
+func (me *Service) Query(args ExecArgs, reply *RowsReply) (err error) {
 	stmt := me.ref(args.StmtRef).(*sql.Stmt)
 	rows, err := stmt.Query(args.Values...)
 	if err != nil {
@@ -114,12 +114,12 @@ func (me *Server) Query(args ExecArgs, reply *RowsReply) (err error) {
 	return
 }
 
-func (me *Server) RowsClose(rowsId int, reply *interface{}) (err error) {
+func (me *Service) RowsClose(rowsId int, reply *interface{}) (err error) {
 	err = me.popRef(rowsId).(*sql.Rows).Close()
 	return
 }
 
-func (me *Server) ExecStmt(args ExecArgs, reply *ResultReply) (err error) {
+func (me *Service) ExecStmt(args ExecArgs, reply *ResultReply) (err error) {
 	stmt := me.ref(args.StmtRef).(*sql.Stmt)
 	res, err := stmt.Exec(args.Values...)
 	if err != nil {
@@ -130,7 +130,7 @@ func (me *Server) ExecStmt(args ExecArgs, reply *ResultReply) (err error) {
 	return
 }
 
-func (me *Server) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error) {
+func (me *Service) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error) {
 	rows := me.ref(args.RowsRef).(*sql.Rows)
 	reply.Values = make([]interface{}, args.NumValues)
 	dest := make([]interface{}, args.NumValues)
@@ -148,7 +148,7 @@ func (me *Server) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error) 
 	return
 }
 
-func (me *Server) CloseStmt(stmtRef int, reply *struct{}) (err error) {
+func (me *Service) CloseStmt(stmtRef int, reply *struct{}) (err error) {
 	err = me.popRef(stmtRef).(*sql.Stmt).Close()
 	return
 }

@@ -18,7 +18,7 @@ import (
 
 var (
 	serverAddr string
-	server     *Server
+	server     *Service
 )
 
 func init() {
@@ -29,7 +29,7 @@ func init() {
 		log.Fatal(err)
 	}
 	backendDB.SetMaxOpenConns(1)
-	server = &Server{DB: backendDB}
+	server = &Service{DB: backendDB}
 	err = rpc.Register(server)
 	if err != nil {
 		log.Fatal(err)
