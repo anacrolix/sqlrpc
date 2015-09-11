@@ -27,6 +27,7 @@ func refsHandler(s *sqlrpc.Service) http.Handler {
 func main() {
 	log.SetFlags(log.Flags() | log.Lshortfile)
 	dsn := flag.String("dsn", "", "sqlite3 dsn")
+	addr := flag.String("addr", ":6033", "listen")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		fmt.Fprintf(os.Stderr, "unexpected positional arguments\n")
@@ -41,5 +42,5 @@ func main() {
 	rpc.Register(&s)
 	rpc.HandleHTTP()
 	http.Handle("/refs", refsHandler(&s))
-	log.Print(http.ListenAndServe(":6033", nil))
+	log.Print(http.ListenAndServe(*addr, nil))
 }
