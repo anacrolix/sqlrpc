@@ -119,12 +119,15 @@ func (me *rows) Columns() []string {
 
 func (me *stmt) Query(args []driver.Value) (ret driver.Rows, err error) {
 	var reply RowsReply
-	err = me.conn.client.Call("Query", ExecArgs{me.ref, func() (ret []interface{}) {
-		for _, v := range args {
-			ret = append(ret, v)
-		}
-		return
-	}()}, &reply)
+	err = me.conn.client.Call(
+		"Query",
+		ExecArgs{me.ref, func() (ret []interface{}) {
+			for _, v := range args {
+				ret = append(ret, v)
+			}
+			return
+		}()},
+		&reply)
 	if err != nil {
 		return
 	}

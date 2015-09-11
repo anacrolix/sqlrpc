@@ -85,9 +85,7 @@ func TestSimple(t *testing.T) {
 	}
 	defer db.Close()
 	_, err = db.Exec("create table test(universe)")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	res, err := db.Exec("insert into test values(?)", 42)
 	if err != nil {
 		t.Fatal(err)
