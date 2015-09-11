@@ -3,6 +3,7 @@ package sqlrpc
 import (
 	"database/sql"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -29,7 +30,10 @@ func init() {
 		log.Fatal(err)
 	}
 	backendDB.SetMaxOpenConns(1)
-	service = &Service{DB: backendDB}
+	service = &Service{
+		DB:     backendDB,
+		Expiry: time.Second,
+	}
 	err = rpc.Register(service)
 	if err != nil {
 		log.Fatal(err)
@@ -113,12 +117,16 @@ func TestTransactionSingleConnection(t *testing.T) {
 	tx, _ := db.Begin()
 	tx.Exec("create table a(b)")
 	tx.Exec("insert into a values(?)", 1)
+	t.Log(time.Now())
 	row := tx.QueryRow("select * from a where b < ?", 2)
 	var i int
-	row.Scan(&i)
+	err := row.Scan(&i)
+	t.Log(time.Now())
+	require.NoError(t, err)
 	require.EqualValues(t, 1, i)
 	tx.Exec("insert into a values(?)", 2)
-	rows, _ := tx.Query("select b from a where b > ?", 0)
+	rows, err := tx.Query("select b from a where b > ?", 0)
+	require.NoError(t, err)
 	cols, _ := rows.Columns()
 	require.EqualValues(t, []string{"b"}, cols)
 	require.True(t, rows.Next())
@@ -204,4 +212,25 @@ func Benchmark(b *testing.B) {
 		db.Exec("delete from a")
 	}
 	assert.Equal(b, 0, len(service.refs))
+}
+
+func TestExpires(t *testing.T) {
+	db, _ := sql.Open("sqlrpc", serverAddr)
+	defer db.Close()
+	db.Exec("drop table if exists a")
+	db.Exec("create table a(b)")
+	db.Exec("insert into a default values")
+	rows, _ := db.Query("select * from a where b < ?", 3)
+	time.Sleep(time.Second)
+	assert.False(t, rows.Next())
+	// Rows handle should be expired.
+	require.Error(t, rows.Err())
+}
+
+func TestMaxIntTimerDuration(t *testing.T) {
+	tr := time.AfterFunc(math.MaxInt64, func() {
+		t.Fatal("timer fired")
+	})
+	time.Sleep(time.Millisecond)
+	require.True(t, tr.Stop())
 }

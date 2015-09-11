@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"time"
 
 	_ "github.com/anacrolix/envpprof"
 	_ "github.com/mattn/go-sqlite3"
@@ -36,7 +37,7 @@ func main() {
 		log.Fatal(err)
 	}
 	db.SetMaxOpenConns(1)
-	s := sqlrpc.Service{DB: db}
+	s := sqlrpc.Service{DB: db, Expiry: time.Minute}
 	rpc.Register(&s)
 	rpc.HandleHTTP()
 	http.Handle("/refs", refsHandler(&s))
