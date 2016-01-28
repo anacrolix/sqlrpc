@@ -25,7 +25,7 @@ func refsHandler(s *sqlrpc.Service) http.Handler {
 }
 
 func main() {
-	log.SetFlags(log.Flags() | log.Lshortfile)
+	log.SetFlags(log.Flags() | log.Llongfile)
 	dsn := flag.String("dsn", "", "sqlite3 dsn")
 	addr := flag.String("addr", ":6033", "listen")
 	flag.Parse()
