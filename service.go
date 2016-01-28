@@ -35,6 +35,8 @@ func (me *Service) expiry() time.Duration {
 	return me.Expiry
 }
 
+// net/rpc complains about this methods signature, but it needs to be public
+// to export this information to a status page.
 func (me *Service) Refs() (ret map[int]interface{}) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
