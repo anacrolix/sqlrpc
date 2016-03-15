@@ -19,7 +19,7 @@ import (
 
 var (
 	serverAddr string
-	service    *Service
+	service    *Server
 )
 
 func init() {
@@ -30,7 +30,7 @@ func init() {
 		log.Fatal(err)
 	}
 	backendDB.SetMaxOpenConns(1)
-	service = &Service{
+	service = &Server{
 		DB:     backendDB,
 		Expiry: time.Second,
 	}

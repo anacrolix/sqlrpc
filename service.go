@@ -19,16 +19,22 @@ type ref struct {
 	timer  *time.Timer
 }
 
-type Service struct {
+type Server struct {
 	DB     *sql.DB
 	Expiry time.Duration
 
 	mu      sync.Mutex
 	refs    map[int]*ref
 	nextRef int
+
+	Service
 }
 
-func (me *Service) expiry() time.Duration {
+type Service struct {
+	Server *Server
+}
+
+func (me *Server) expiry() time.Duration {
 	if me.Expiry == 0 {
 		return math.MaxInt64
 	}
@@ -37,7 +43,7 @@ func (me *Service) expiry() time.Duration {
 
 // net/rpc complains about this methods signature, but it needs to be public
 // to export this information to a status page.
-func (me *Service) Refs() (ret map[int]interface{}) {
+func (me *Server) Refs() (ret map[int]interface{}) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	ret = make(map[int]interface{}, len(me.refs))
@@ -60,7 +66,7 @@ func releaseSqlObj(obj interface{}) error {
 	}
 }
 
-func (me *Service) newRef(obj interface{}) (ret int) {
+func (me *Server) newRef(obj interface{}) (ret int) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	if me.refs == nil {
@@ -84,7 +90,7 @@ func (me *Service) newRef(obj interface{}) (ret int) {
 	return
 }
 
-func (me *Service) expireRef(id int, obj interface{}) func() {
+func (me *Server) expireRef(id int, obj interface{}) func() {
 	return func() {
 		log.Printf("expiring %d: %T", id, obj)
 		so, err := me.popRef(id)
@@ -101,7 +107,7 @@ func (me *Service) expireRef(id int, obj interface{}) func() {
 
 var errBadRef = errors.New("bad ref")
 
-func (me *Service) popRef(id int) (ret interface{}, err error) {
+func (me *Server) popRef(id int) (ret interface{}, err error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	ref, ok := me.refs[id]
@@ -118,7 +124,7 @@ func (me *Service) popRef(id int) (ret interface{}, err error) {
 	return
 }
 
-func (me *Service) ref(id int) (ret interface{}, err error) {
+func (me *Server) ref(id int) (ret interface{}, err error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	ref, ok := me.refs[id]
@@ -131,7 +137,7 @@ func (me *Service) ref(id int) (ret interface{}, err error) {
 	return
 }
 
-func (me *Service) Begin(args struct{}, txId *int) (err error) {
+func (me *Server) Begin(args struct{}, txId *int) (err error) {
 	tx, err := me.DB.Begin()
 	if err != nil {
 		return
@@ -140,7 +146,7 @@ func (me *Service) Begin(args struct{}, txId *int) (err error) {
 	return
 }
 
-func (me *Service) Commit(txId int, reply *struct{}) (err error) {
+func (me *Server) Commit(txId int, reply *struct{}) (err error) {
 	_tx, err := me.popRef(txId)
 	if err != nil {
 		return
@@ -150,7 +156,7 @@ func (me *Service) Commit(txId int, reply *struct{}) (err error) {
 }
 
 func (me *Service) Rollback(txId int, reply *struct{}) (err error) {
-	_tx, err := me.popRef(txId)
+	_tx, err := me.Server.popRef(txId)
 	if err != nil {
 		return
 	}
@@ -164,24 +170,24 @@ func (me *Service) Prepare(args PrepareArgs, stmtRef *int) (err error) {
 	}
 	if args.InTx {
 		var sqlObj interface{}
-		sqlObj, err = me.ref(args.TxId)
+		sqlObj, err = me.Server.ref(args.TxId)
 		if err != nil {
 			return
 		}
 		ppr = sqlObj.(*sql.Tx)
 	} else {
-		ppr = me.DB
+		ppr = me.Server.DB
 	}
 	stmt, err := ppr.Prepare(args.Query)
 	if err != nil {
 		return
 	}
-	*stmtRef = me.newRef(stmt)
+	*stmtRef = me.Server.newRef(stmt)
 	return
 }
 
 func (me *Service) Query(args ExecArgs, reply *RowsReply) (err error) {
-	_stmt, err := me.ref(args.StmtRef)
+	_stmt, err := me.Server.ref(args.StmtRef)
 	if err != nil {
 		return
 	}
@@ -191,12 +197,12 @@ func (me *Service) Query(args ExecArgs, reply *RowsReply) (err error) {
 		return
 	}
 	reply.Columns, err = rows.Columns()
-	reply.RowsId = me.newRef(rows)
+	reply.RowsId = me.Server.newRef(rows)
 	return
 }
 
 func (me *Service) RowsClose(rowsId int, reply *interface{}) (err error) {
-	_rows, err := me.popRef(rowsId)
+	_rows, err := me.Server.popRef(rowsId)
 	if err != nil {
 		return
 	}
@@ -206,7 +212,7 @@ func (me *Service) RowsClose(rowsId int, reply *interface{}) (err error) {
 }
 
 func (me *Service) ExecStmt(args ExecArgs, reply *ResultReply) (err error) {
-	_stmt, err := me.ref(args.StmtRef)
+	_stmt, err := me.Server.ref(args.StmtRef)
 	if err != nil {
 		return
 	}
@@ -220,7 +226,7 @@ func (me *Service) ExecStmt(args ExecArgs, reply *ResultReply) (err error) {
 	return
 }
 
-func (me *Service) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error) {
+func (me *Server) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error) {
 	_rows, err := me.ref(args.RowsRef)
 	if err != nil {
 		return
@@ -242,7 +248,7 @@ func (me *Service) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error)
 	return
 }
 
-func (me *Service) releaseRef(id int) (err error) {
+func (me *Server) releaseRef(id int) (err error) {
 	sqlObj, err := me.popRef(id)
 	if err == errBadRef {
 		err = nil
@@ -255,7 +261,7 @@ func (me *Service) releaseRef(id int) (err error) {
 	return
 }
 
-func (me *Service) CloseStmt(stmtRef int, reply *struct{}) (err error) {
+func (me *Server) CloseStmt(stmtRef int, reply *struct{}) (err error) {
 	err = me.releaseRef(stmtRef)
 	return
 }
