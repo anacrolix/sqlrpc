@@ -19,7 +19,7 @@ import (
 
 var (
 	serverAddr string
-	service    *Server
+	server     *Server
 )
 
 func init() {
@@ -30,11 +30,12 @@ func init() {
 		log.Fatal(err)
 	}
 	backendDB.SetMaxOpenConns(1)
-	service = &Server{
+	server = &Server{
 		DB:     backendDB,
 		Expiry: time.Second,
 	}
-	err = rpc.Register(service)
+	server.Service.Server = server
+	err = rpc.RegisterName("SQLRPC", &server.Service)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -50,14 +51,14 @@ func init() {
 // connection limit of 1.
 func TestConcurrentTransactionsSQLite(t *testing.T) {
 	started := time.Now()
-	tx1, _ := service.DB.Begin()
+	tx1, _ := server.DB.Begin()
 	t.Log(time.Since(started))
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		tx1.Rollback()
 	}()
 	started = time.Now()
-	tx2, _ := service.DB.Begin()
+	tx2, _ := server.DB.Begin()
 	tx2.Rollback()
 	took := time.Since(started)
 	t.Log(took)
@@ -105,7 +106,7 @@ func TestSimple(t *testing.T) {
 	}
 	ra, _ = res.RowsAffected()
 	assert.EqualValues(t, 1, ra)
-	assert.Equal(t, 0, len(service.refs))
+	assert.Equal(t, 0, len(server.refs))
 }
 
 func TestTransactionSingleConnection(t *testing.T) {
@@ -181,9 +182,9 @@ func TestDatabaseLocked(t *testing.T) {
 	assert.EqualValues(t, 43, b)
 	assert.Nil(t, db.Close())
 	time.Sleep(12 * time.Millisecond)
-	service.mu.Lock()
-	assert.Equal(t, 0, len(service.refs))
-	service.mu.Unlock()
+	server.mu.Lock()
+	assert.Equal(t, 0, len(server.refs))
+	server.mu.Unlock()
 }
 
 func Benchmark(b *testing.B) {
@@ -209,7 +210,7 @@ func Benchmark(b *testing.B) {
 		rows.Close()
 		db.Exec("delete from a")
 	}
-	assert.Equal(b, 0, len(service.refs))
+	assert.Equal(b, 0, len(server.refs))
 }
 
 func TestExpires(t *testing.T) {

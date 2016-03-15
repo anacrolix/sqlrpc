@@ -2,152 +2,25 @@ package sqlrpc
 
 import (
 	"database/sql"
-	"errors"
-	"fmt"
-	"log"
-	"math"
-	"sync"
-	"time"
 
 	"github.com/bradfitz/iter"
 )
-
-const logRefs = false
-
-type ref struct {
-	sqlObj interface{}
-	timer  *time.Timer
-}
-
-type Server struct {
-	DB     *sql.DB
-	Expiry time.Duration
-
-	mu      sync.Mutex
-	refs    map[int]*ref
-	nextRef int
-
-	Service
-}
 
 type Service struct {
 	Server *Server
 }
 
-func (me *Server) expiry() time.Duration {
-	if me.Expiry == 0 {
-		return math.MaxInt64
-	}
-	return me.Expiry
-}
-
-// net/rpc complains about this methods signature, but it needs to be public
-// to export this information to a status page.
-func (me *Server) Refs() (ret map[int]interface{}) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	ret = make(map[int]interface{}, len(me.refs))
-	for k, v := range me.refs {
-		ret[k] = v
-	}
-	return
-}
-
-func releaseSqlObj(obj interface{}) error {
-	switch v := obj.(type) {
-	case *sql.Stmt:
-		return v.Close()
-	case *sql.Rows:
-		return v.Close()
-	case *sql.Tx:
-		return v.Rollback()
-	default:
-		return fmt.Errorf("unexpected type: %T", obj)
-	}
-}
-
-func (me *Server) newRef(obj interface{}) (ret int) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	if me.refs == nil {
-		me.refs = make(map[int]*ref)
-	}
-	for {
-		if _, ok := me.refs[me.nextRef]; !ok {
-			break
-		}
-		me.nextRef++
-	}
-	me.refs[me.nextRef] = &ref{
-		sqlObj: obj,
-		timer:  time.AfterFunc(me.expiry(), me.expireRef(me.nextRef, obj)),
-	}
-	ret = me.nextRef
-	me.nextRef++
-	if logRefs {
-		log.Print(me.refs)
-	}
-	return
-}
-
-func (me *Server) expireRef(id int, obj interface{}) func() {
-	return func() {
-		log.Printf("expiring %d: %T", id, obj)
-		so, err := me.popRef(id)
-		if err == errBadRef {
-			return
-		}
-		if err != nil {
-			log.Print(err)
-			return
-		}
-		releaseSqlObj(so)
-	}
-}
-
-var errBadRef = errors.New("bad ref")
-
-func (me *Server) popRef(id int) (ret interface{}, err error) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	ref, ok := me.refs[id]
-	if !ok {
-		err = errBadRef
-		return
-	}
-	ref.timer.Stop()
-	ret = ref.sqlObj
-	delete(me.refs, id)
-	if logRefs {
-		log.Print(me.refs)
-	}
-	return
-}
-
-func (me *Server) ref(id int) (ret interface{}, err error) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	ref, ok := me.refs[id]
-	if !ok {
-		err = errBadRef
-		return
-	}
-	ref.timer.Reset(me.expiry())
-	ret = ref.sqlObj
-	return
-}
-
-func (me *Server) Begin(args struct{}, txId *int) (err error) {
-	tx, err := me.DB.Begin()
+func (me *Service) Begin(args struct{}, txId *int) (err error) {
+	tx, err := me.Server.DB.Begin()
 	if err != nil {
 		return
 	}
-	*txId = me.newRef(tx)
+	*txId = me.Server.newRef(tx)
 	return
 }
 
-func (me *Server) Commit(txId int, reply *struct{}) (err error) {
-	_tx, err := me.popRef(txId)
+func (me *Service) Commit(txId int, reply *struct{}) (err error) {
+	_tx, err := me.Server.popRef(txId)
 	if err != nil {
 		return
 	}
@@ -226,8 +99,8 @@ func (me *Service) ExecStmt(args ExecArgs, reply *ResultReply) (err error) {
 	return
 }
 
-func (me *Server) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error) {
-	_rows, err := me.ref(args.RowsRef)
+func (me *Service) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error) {
+	_rows, err := me.Server.ref(args.RowsRef)
 	if err != nil {
 		return
 	}
@@ -248,20 +121,7 @@ func (me *Server) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error) 
 	return
 }
 
-func (me *Server) releaseRef(id int) (err error) {
-	sqlObj, err := me.popRef(id)
-	if err == errBadRef {
-		err = nil
-		return
-	}
-	if err != nil {
-		return
-	}
-	err = releaseSqlObj(sqlObj)
-	return
-}
-
-func (me *Server) CloseStmt(stmtRef int, reply *struct{}) (err error) {
-	err = me.releaseRef(stmtRef)
+func (me *Service) CloseStmt(stmtRef int, reply *struct{}) (err error) {
+	err = me.Server.releaseRef(stmtRef)
 	return
 }
