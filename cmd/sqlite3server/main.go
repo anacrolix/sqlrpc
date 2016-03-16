@@ -40,7 +40,7 @@ func main() {
 	db.SetMaxOpenConns(1)
 	s := sqlrpc.Server{DB: db, Expiry: time.Minute}
 	s.Service.Server = &s
-	rpc.Register(&s.Service)
+	rpc.RegisterName("SQLRPC", &s.Service)
 	rpc.HandleHTTP()
 	http.Handle("/refs", refsHandler(&s))
 	log.Print(http.ListenAndServe(*addr, nil))
