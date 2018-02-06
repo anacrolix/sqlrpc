@@ -17,8 +17,10 @@ import (
 
 func refsHandler(s *sqlrpc.Server) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		for ref, val := range s.Refs() {
-			fmt.Fprintf(w, "%d: %#v\n\n", ref, val)
+		refs := s.Refs()
+		fmt.Fprintf(w, "# refs: %d\n", len(refs))
+		for ref, val := range refs {
+			fmt.Fprintf(w, "%d: %#v\n", ref, val)
 		}
 	})
 }

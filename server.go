@@ -42,14 +42,12 @@ func (me *Server) expiry() time.Duration {
 	return me.Expiry
 }
 
-// net/rpc complains about this methods signature, but it needs to be public
-// to export this information to a status page.
 func (me *Server) Refs() (ret map[RefId]interface{}) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	ret = make(map[RefId]interface{}, len(me.refs))
 	for k, v := range me.refs {
-		ret[k] = v
+		ret[k] = v.sqlObj
 	}
 	return
 }
