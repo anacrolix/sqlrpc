@@ -30,7 +30,8 @@ func main() {
 		Addr           string
 		DbMaxOpenConns int
 	}{
-		Addr: "localhost:6033",
+		Addr:           "localhost:6033",
+		DbMaxOpenConns: 1,
 	}
 	tagflag.Parse(&flags)
 	db, err := sql.Open("sqlite3", flags.DSN)
