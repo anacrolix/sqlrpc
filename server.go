@@ -65,7 +65,7 @@ func releaseSqlObj(obj interface{}) error {
 	}
 }
 
-func (me *Server) newRef(obj interface{}) (ret RefId) {
+func (me *Server) newRef(obj interface{}, expire bool) (ret RefId) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	if me.refs == nil {
@@ -79,7 +79,16 @@ func (me *Server) newRef(obj interface{}) (ret RefId) {
 	}
 	me.refs[me.nextRef] = &ref{
 		sqlObj: obj,
-		timer:  time.AfterFunc(me.expiry(), me.expireRef(me.nextRef, obj)),
+		timer: time.AfterFunc(
+			me.expiry(),
+			func() func() {
+				if expire {
+					return me.expireRef(me.nextRef, obj)
+				} else {
+					return func() {}
+				}
+			}(),
+		),
 	}
 	ret = me.nextRef
 	me.nextRef++

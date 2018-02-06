@@ -10,7 +10,7 @@ import (
 
 type Service struct {
 	Server interface {
-		newRef(interface{}) RefId
+		newRef(obj interface{}, expire bool) RefId
 		popRef(RefId) (interface{}, error)
 		ref(RefId) (interface{}, error)
 		releaseRef(RefId) error
@@ -23,7 +23,7 @@ func (me *Service) Begin(args struct{}, txId *RefId) (err error) {
 	if err != nil {
 		return
 	}
-	*txId = me.Server.newRef(tx)
+	*txId = me.Server.newRef(tx, true)
 	return
 }
 
@@ -63,7 +63,7 @@ func (me *Service) Prepare(args PrepareArgs, stmtRef *RefId) (err error) {
 	if err != nil {
 		return
 	}
-	*stmtRef = me.Server.newRef(stmt)
+	*stmtRef = me.Server.newRef(stmt, false)
 	return
 }
 
@@ -78,7 +78,7 @@ func (me *Service) Query(args QueryArgs, reply *RowsReply) (err error) {
 		return
 	}
 	reply.Columns, err = rows.Columns()
-	reply.RowsId = me.Server.newRef(rows)
+	reply.RowsId = me.Server.newRef(rows, true)
 	return
 }
 
