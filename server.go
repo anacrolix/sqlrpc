@@ -17,13 +17,15 @@ type ref struct {
 	timer  *time.Timer
 }
 
+type RefId int
+
 type Server struct {
 	DB     *sql.DB
 	Expiry time.Duration
 
 	mu      sync.Mutex
-	refs    map[int]*ref
-	nextRef int
+	refs    map[RefId]*ref
+	nextRef RefId
 
 	Service
 }
@@ -37,10 +39,10 @@ func (me *Server) expiry() time.Duration {
 
 // net/rpc complains about this methods signature, but it needs to be public
 // to export this information to a status page.
-func (me *Server) Refs() (ret map[int]interface{}) {
+func (me *Server) Refs() (ret map[RefId]interface{}) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
-	ret = make(map[int]interface{}, len(me.refs))
+	ret = make(map[RefId]interface{}, len(me.refs))
 	for k, v := range me.refs {
 		ret[k] = v
 	}
@@ -60,11 +62,11 @@ func releaseSqlObj(obj interface{}) error {
 	}
 }
 
-func (me *Server) newRef(obj interface{}) (ret int) {
+func (me *Server) newRef(obj interface{}) (ret RefId) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	if me.refs == nil {
-		me.refs = make(map[int]*ref)
+		me.refs = make(map[RefId]*ref)
 	}
 	for {
 		if _, ok := me.refs[me.nextRef]; !ok {
@@ -84,7 +86,7 @@ func (me *Server) newRef(obj interface{}) (ret int) {
 	return
 }
 
-func (me *Server) expireRef(id int, obj interface{}) func() {
+func (me *Server) expireRef(id RefId, obj interface{}) func() {
 	return func() {
 		log.Printf("expiring %d: %T", id, obj)
 		so, err := me.popRef(id)
@@ -101,7 +103,7 @@ func (me *Server) expireRef(id int, obj interface{}) func() {
 
 var errBadRef = errors.New("bad ref")
 
-func (me *Server) popRef(id int) (ret interface{}, err error) {
+func (me *Server) popRef(id RefId) (ret interface{}, err error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	ref, ok := me.refs[id]
@@ -118,7 +120,7 @@ func (me *Server) popRef(id int) (ret interface{}, err error) {
 	return
 }
 
-func (me *Server) ref(id int) (ret interface{}, err error) {
+func (me *Server) ref(id RefId) (ret interface{}, err error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	ref, ok := me.refs[id]
@@ -131,7 +133,7 @@ func (me *Server) ref(id int) (ret interface{}, err error) {
 	return
 }
 
-func (me *Server) releaseRef(id int) (err error) {
+func (me *Server) releaseRef(id RefId) (err error) {
 	sqlObj, err := me.popRef(id)
 	if err == errBadRef {
 		err = nil

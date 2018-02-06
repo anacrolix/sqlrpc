@@ -7,8 +7,8 @@
 package sqlrpc
 
 type ExecArgs struct {
-	StmtRef int
 	Values  []interface{}
+	StmtRef RefId
 }
 
 type CommitArgs struct {
@@ -17,11 +17,11 @@ type CommitArgs struct {
 
 type RowsReply struct {
 	Columns []string
-	RowsId  int
+	RowsId  RefId
 }
 
 type RowsNextArgs struct {
-	RowsRef   int
+	RowsRef   RefId
 	NumValues int
 }
 
@@ -39,6 +39,6 @@ type ResultReply struct {
 
 type PrepareArgs struct {
 	Query string
-	TxId  int
+	TxId  RefId
 	InTx  bool
 }

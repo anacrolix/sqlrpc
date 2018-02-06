@@ -15,7 +15,7 @@ type rpcsqlDriver struct{}
 
 type conn struct {
 	client *Client
-	txId   int
+	txId   RefId
 	inTx   bool
 }
 
@@ -32,7 +32,7 @@ func (me rpcsqlDriver) Open(name string) (ret driver.Conn, err error) {
 }
 
 func (me *conn) Begin() (ret driver.Tx, err error) {
-	var txId int
+	var txId RefId
 	err = me.client.Call("Begin", struct{}{}, &txId)
 	if err != nil {
 		return
@@ -44,7 +44,7 @@ func (me *conn) Begin() (ret driver.Tx, err error) {
 }
 
 type tx struct {
-	id   int
+	id   RefId
 	conn *conn
 }
 
@@ -74,7 +74,7 @@ func (me *conn) Close() (err error) {
 
 type stmt struct {
 	conn *conn
-	ref  int
+	ref  RefId
 }
 
 func (me *stmt) Close() error {
@@ -163,7 +163,7 @@ func (me *stmt) Exec(args []driver.Value) (ret driver.Result, err error) {
 }
 
 func (me *conn) Prepare(query string) (ret driver.Stmt, err error) {
-	var ref int
+	var ref RefId
 	err = me.client.Call(
 		"Prepare",
 		PrepareArgs{query, me.txId, me.inTx},

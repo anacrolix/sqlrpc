@@ -10,8 +10,8 @@ type Service struct {
 	Server *Server
 }
 
-func (me *Service) Begin(args struct{}, txId *int) (err error) {
 	tx, err := me.Server.DB.Begin()
+func (me *Service) Begin(args struct{}, txId *RefId) (err error) {
 	if err != nil {
 		return
 	}
@@ -19,7 +19,7 @@ func (me *Service) Begin(args struct{}, txId *int) (err error) {
 	return
 }
 
-func (me *Service) Commit(txId int, reply *struct{}) (err error) {
+func (me *Service) Commit(txId RefId, reply *struct{}) (err error) {
 	_tx, err := me.Server.popRef(txId)
 	if err != nil {
 		return
@@ -28,7 +28,7 @@ func (me *Service) Commit(txId int, reply *struct{}) (err error) {
 	return tx.Commit()
 }
 
-func (me *Service) Rollback(txId int, reply *struct{}) (err error) {
+func (me *Service) Rollback(txId RefId, reply *struct{}) (err error) {
 	_tx, err := me.Server.popRef(txId)
 	if err != nil {
 		return
@@ -37,7 +37,7 @@ func (me *Service) Rollback(txId int, reply *struct{}) (err error) {
 	return tx.Rollback()
 }
 
-func (me *Service) Prepare(args PrepareArgs, stmtRef *int) (err error) {
+func (me *Service) Prepare(args PrepareArgs, stmtRef *RefId) (err error) {
 	var ppr interface {
 		Prepare(string) (*sql.Stmt, error)
 	}
@@ -74,7 +74,7 @@ func (me *Service) Query(args ExecArgs, reply *RowsReply) (err error) {
 	return
 }
 
-func (me *Service) RowsClose(rowsId int, reply *interface{}) (err error) {
+func (me *Service) RowsClose(rowsId RefId, reply *interface{}) (err error) {
 	_rows, err := me.Server.popRef(rowsId)
 	if err != nil {
 		return
@@ -121,7 +121,7 @@ func (me *Service) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error)
 	return
 }
 
-func (me *Service) CloseStmt(stmtRef int, reply *struct{}) (err error) {
+func (me *Service) CloseStmt(stmtRef RefId, reply *struct{}) (err error) {
 	err = me.Server.releaseRef(stmtRef)
 	return
 }
