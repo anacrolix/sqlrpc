@@ -6,10 +6,14 @@
 // to other DBs.
 package sqlrpc
 
+import "database/sql/driver"
+
 type ExecArgs struct {
-	Values  []interface{}
 	StmtRef RefId
+	Values  []driver.NamedValue
 }
+
+type QueryArgs = ExecArgs
 
 type CommitArgs struct {
 	TxID interface{}

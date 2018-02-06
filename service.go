@@ -2,7 +2,9 @@ package sqlrpc
 
 import (
 	"database/sql"
+	"database/sql/driver"
 
+	"github.com/anacrolix/missinggo/slices"
 	"github.com/bradfitz/iter"
 )
 
@@ -65,13 +67,13 @@ func (me *Service) Prepare(args PrepareArgs, stmtRef *RefId) (err error) {
 	return
 }
 
-func (me *Service) Query(args ExecArgs, reply *RowsReply) (err error) {
+func (me *Service) Query(args QueryArgs, reply *RowsReply) (err error) {
 	_stmt, err := me.Server.ref(args.StmtRef)
 	if err != nil {
 		return
 	}
 	stmt := _stmt.(*sql.Stmt)
-	rows, err := stmt.Query(args.Values...)
+	rows, err := stmt.Query(slices.ToEmptyInterface(driverNamedValuesToNamedArgs(args.Values))...)
 	if err != nil {
 		return
 	}
@@ -90,13 +92,20 @@ func (me *Service) RowsClose(rowsId RefId, reply *interface{}) (err error) {
 	return
 }
 
+func driverNamedValuesToNamedArgs(nvs []driver.NamedValue) (nas []sql.NamedArg) {
+	for _, nv := range nvs {
+		nas = append(nas, sql.Named(nv.Name, nv.Value))
+	}
+	return
+}
+
 func (me *Service) ExecStmt(args ExecArgs, reply *ResultReply) (err error) {
 	_stmt, err := me.Server.ref(args.StmtRef)
 	if err != nil {
 		return
 	}
 	stmt := _stmt.(*sql.Stmt)
-	res, err := stmt.Exec(args.Values...)
+	res, err := stmt.Exec(slices.ToEmptyInterface(driverNamedValuesToNamedArgs(args.Values))...)
 	if err != nil {
 		return
 	}

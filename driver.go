@@ -1,6 +1,7 @@
 package sqlrpc
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"io"
@@ -77,6 +78,11 @@ type stmt struct {
 	ref  RefId
 }
 
+var _ interface {
+	driver.StmtQueryContext
+	driver.StmtExecContext
+} = (*stmt)(nil)
+
 func (me *stmt) Close() error {
 	return me.conn.client.Call("CloseStmt", me.ref, nil)
 }
@@ -118,15 +124,14 @@ func (me *rows) Columns() []string {
 }
 
 func (me *stmt) Query(args []driver.Value) (ret driver.Rows, err error) {
+	panic("use QueryContext")
+}
+
+func (me *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (ret driver.Rows, err error) {
 	var reply RowsReply
 	err = me.conn.client.Call(
 		"Query",
-		ExecArgs{me.ref, func() (ret []interface{}) {
-			for _, v := range args {
-				ret = append(ret, v)
-			}
-			return
-		}()},
+		ExecArgs{me.ref, args},
 		&reply)
 	if err != nil {
 		return
@@ -148,13 +153,12 @@ func (me *result) RowsAffected() (int64, error) {
 }
 
 func (me *stmt) Exec(args []driver.Value) (ret driver.Result, err error) {
+	panic("use ExecContext")
+}
+
+func (me *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (ret driver.Result, err error) {
 	var rr ResultReply
-	err = me.conn.client.Call("ExecStmt", ExecArgs{me.ref, func() (ret []interface{}) {
-		for _, v := range args {
-			ret = append(ret, v)
-		}
-		return
-	}()}, &rr)
+	err = me.conn.client.Call("ExecStmt", ExecArgs{me.ref, args}, &rr)
 	if err != nil {
 		return
 	}

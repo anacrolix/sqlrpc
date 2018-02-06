@@ -1,6 +1,7 @@
 package sqlrpc
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"math"
@@ -81,9 +82,7 @@ func TestPing(t *testing.T) {
 
 func TestSimple(t *testing.T) {
 	db, err := sql.Open("sqlrpc", serverAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 	_, err = db.Exec("create table test(universe)")
 	require.NoError(t, err)
@@ -104,6 +103,30 @@ func TestSimple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ra, _ = res.RowsAffected()
+	assert.EqualValues(t, 1, ra)
+	assert.Equal(t, 0, len(server.refs))
+}
+
+// Try variations of {Exec,Query}{,Context} with and without NamedArgs.
+func TestSimpleNamedContext(t *testing.T) {
+	db, err := sql.Open("sqlrpc", serverAddr)
+	require.NoError(t, err)
+	defer db.Close()
+	db.Exec("drop table if exists test")
+	_, err = db.ExecContext(context.Background(), "create table test(universe)")
+	require.NoError(t, err)
+	res, err := db.Exec("insert into test values(:n)", sql.Named("n", 42))
+	require.NoError(t, err)
+	ra, _ := res.RowsAffected()
+	assert.EqualValues(t, 1, ra)
+	var answer int
+	row := db.QueryRowContext(context.Background(), "select * from test")
+	err = row.Scan(&answer)
+	require.NoError(t, err)
+	assert.EqualValues(t, 42, answer)
+	res, err = db.ExecContext(context.Background(), "insert into test values(?)", 42)
+	require.NoError(t, err)
 	ra, _ = res.RowsAffected()
 	assert.EqualValues(t, 1, ra)
 	assert.Equal(t, 0, len(server.refs))
