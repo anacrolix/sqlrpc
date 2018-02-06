@@ -2,15 +2,14 @@ package main
 
 import (
 	"database/sql"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"net/rpc"
-	"os"
 	"time"
 
 	_ "github.com/anacrolix/envpprof"
+	"github.com/anacrolix/tagflag"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/anacrolix/sqlrpc"
@@ -26,22 +25,23 @@ func refsHandler(s *sqlrpc.Server) http.Handler {
 
 func main() {
 	log.SetFlags(log.Flags() | log.Llongfile)
-	dsn := flag.String("dsn", "", "sqlite3 dsn")
-	addr := flag.String("addr", ":6033", "listen")
-	flag.Parse()
-	if flag.NArg() != 0 {
-		fmt.Fprintf(os.Stderr, "unexpected positional arguments\n")
-		os.Exit(2)
+	flags := struct {
+		DSN            string
+		Addr           string
+		DbMaxOpenConns int
+	}{
+		Addr: "localhost:6033",
 	}
-	db, err := sql.Open("sqlite3", *dsn)
+	tagflag.Parse(&flags)
+	db, err := sql.Open("sqlite3", flags.DSN)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("error opening database: %s", err)
 	}
-	db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(flags.DbMaxOpenConns)
 	s := sqlrpc.Server{DB: db, Expiry: time.Minute}
 	s.Service.Server = &s
 	rpc.RegisterName("SQLRPC", &s.Service)
 	rpc.HandleHTTP()
 	http.Handle("/refs", refsHandler(&s))
-	log.Print(http.ListenAndServe(*addr, nil))
+	log.Print(http.ListenAndServe(flags.Addr, nil))
 }
