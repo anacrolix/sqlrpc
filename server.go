@@ -27,7 +27,12 @@ type Server struct {
 	refs    map[RefId]*ref
 	nextRef RefId
 
+	// RPC
 	Service
+}
+
+func (me *Server) db() *sql.DB {
+	return me.DB
 }
 
 func (me *Server) expiry() time.Duration {

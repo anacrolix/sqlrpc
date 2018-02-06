@@ -7,11 +7,17 @@ import (
 )
 
 type Service struct {
-	Server *Server
+	Server interface {
+		newRef(interface{}) RefId
+		popRef(RefId) (interface{}, error)
+		ref(RefId) (interface{}, error)
+		releaseRef(RefId) error
+		db() *sql.DB
+	}
 }
 
-	tx, err := me.Server.DB.Begin()
 func (me *Service) Begin(args struct{}, txId *RefId) (err error) {
+	tx, err := me.Server.db().Begin()
 	if err != nil {
 		return
 	}
@@ -49,7 +55,7 @@ func (me *Service) Prepare(args PrepareArgs, stmtRef *RefId) (err error) {
 		}
 		ppr = sqlObj.(*sql.Tx)
 	} else {
-		ppr = me.Server.DB
+		ppr = me.Server.db()
 	}
 	stmt, err := ppr.Prepare(args.Query)
 	if err != nil {
