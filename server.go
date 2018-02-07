@@ -2,6 +2,7 @@ package sqlrpc
 
 import (
 	"database/sql"
+	"net/rpc"
 
 	"github.com/anacrolix/sqlrpc/refs"
 )
@@ -15,12 +16,9 @@ type ref struct {
 type RefId = refs.Id
 
 type Server struct {
-	DB *sql.DB
-
-	Refs refs.Manager
-
 	// RPC
 	Service
+	RpcServer rpc.Server
 }
 
 func (me *Server) db() *sql.DB {

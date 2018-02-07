@@ -13,7 +13,7 @@ import (
 var errBadRef = errors.New("bad ref")
 
 type Service struct {
-	Refs *refs.Manager
+	Refs refs.Manager
 	DB   *sql.DB
 }
 

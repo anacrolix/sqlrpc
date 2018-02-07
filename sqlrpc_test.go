@@ -18,39 +18,39 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	serverAddr string
-	server     *Server
-)
-
 func init() {
 	log.SetFlags(log.Flags() | log.Lshortfile)
 	rpc.HandleHTTP()
-	backendDB, err := sql.Open("sqlite3", "file::memory:?cache=shared")
-	if err != nil {
-		log.Fatal(err)
-	}
-	backendDB.SetMaxOpenConns(1)
-	server = &Server{
-		DB: backendDB,
-	}
-	server.Service.Refs = &server.Refs
-	server.Service.DB = backendDB
-	err = rpc.RegisterName("SQLRPC", &server.Service)
-	if err != nil {
-		log.Fatal(err)
-	}
+}
+
+type testServer struct {
+	*Server
+	L net.Listener
+}
+
+func (me testServer) Close() {
+	me.DB.Close()
+	me.L.Close()
+}
+
+func startServer(t testing.TB) testServer {
+	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	require.NoError(t, err)
+	db.SetMaxOpenConns(1)
+	server := &Server{}
+	server.Service.DB = db
+	require.NoError(t, server.RpcServer.RegisterName("SQLRPC", &server.Service))
 	l, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		log.Fatal(err)
-	}
-	serverAddr = l.Addr().String()
-	go http.Serve(l, nil)
+	require.NoError(t, err)
+	go http.Serve(l, &server.RpcServer)
+	return testServer{server, l}
 }
 
 // Shows that transactions tie up a connection. The server.DB should have a
 // connection limit of 1.
 func TestConcurrentTransactionsSQLite(t *testing.T) {
+	server := startServer(t)
+	defer server.Close()
 	started := time.Now()
 	tx1, _ := server.DB.Begin()
 	t.Log(time.Since(started))
@@ -69,19 +69,19 @@ func TestConcurrentTransactionsSQLite(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
-	db, err := sql.Open("sqlrpc", serverAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	server := startServer(t)
+	defer server.Close()
+	db, err := sql.Open("sqlrpc", server.L.Addr().String())
+	require.NoError(t, err)
 	defer db.Close()
 	err = db.Ping()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestSimple(t *testing.T) {
-	db, err := sql.Open("sqlrpc", serverAddr)
+	server := startServer(t)
+	defer server.Close()
+	db, err := sql.Open("sqlrpc", server.L.Addr().String())
 	require.NoError(t, err)
 	defer db.Close()
 	_, err = db.Exec("create table test(universe)")
@@ -110,7 +110,9 @@ func TestSimple(t *testing.T) {
 
 // Try variations of {Exec,Query}{,Context} with and without NamedArgs.
 func TestSimpleNamedContext(t *testing.T) {
-	db, err := sql.Open("sqlrpc", serverAddr)
+	server := startServer(t)
+	defer server.Close()
+	db, err := sql.Open("sqlrpc", server.L.Addr().String())
 	require.NoError(t, err)
 	defer db.Close()
 	db.Exec("drop table if exists test")
@@ -133,7 +135,9 @@ func TestSimpleNamedContext(t *testing.T) {
 }
 
 func TestTransactionSingleConnection(t *testing.T) {
-	db, _ := sql.Open("sqlrpc", serverAddr)
+	server := startServer(t)
+	defer server.Close()
+	db, _ := sql.Open("sqlrpc", server.L.Addr().String())
 	defer db.Close()
 	db.Exec("drop table if exists a")
 	tx, _ := db.Begin()
@@ -162,7 +166,9 @@ func TestTransactionSingleConnection(t *testing.T) {
 }
 
 func TestDatabaseLocked(t *testing.T) {
-	db, _ := sql.Open("sqlrpc", serverAddr)
+	server := startServer(t)
+	defer server.Close()
+	db, _ := sql.Open("sqlrpc", server.L.Addr().String())
 	defer db.Close()
 	_, err := db.Exec("create table a(b)")
 	require.NoError(t, err)
@@ -209,7 +215,9 @@ func TestDatabaseLocked(t *testing.T) {
 }
 
 func Benchmark(b *testing.B) {
-	db, _ := sql.Open("sqlrpc", serverAddr)
+	server := startServer(b)
+	defer server.Close()
+	db, _ := sql.Open("sqlrpc", server.L.Addr().String())
 	defer db.Close()
 	db.Exec("drop table if exists a")
 	db.Exec("create table a(b)")
@@ -240,4 +248,7 @@ func TestMaxIntTimerDuration(t *testing.T) {
 	})
 	time.Sleep(time.Millisecond)
 	require.True(t, tr.Stop())
+}
+
+func TestTimeValue(t *testing.T) {
 }

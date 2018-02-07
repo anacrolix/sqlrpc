@@ -49,8 +49,7 @@ func main() {
 		log.Fatalf("error opening database: %s", err)
 	}
 	db.SetMaxOpenConns(flags.DbMaxOpenConns)
-	s := sqlrpc.Server{DB: db}
-	s.Service.Refs = &s.Refs
+	s := sqlrpc.Server{}
 	s.Service.DB = db
 	rpc.RegisterName("SQLRPC", &s.Service)
 	rpc.HandleHTTP()
