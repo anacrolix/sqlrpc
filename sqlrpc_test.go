@@ -32,8 +32,7 @@ func init() {
 	}
 	backendDB.SetMaxOpenConns(1)
 	server = &Server{
-		DB:     backendDB,
-		Expiry: time.Second,
+		DB: backendDB,
 	}
 	server.Service.Server = server
 	err = rpc.RegisterName("SQLRPC", &server.Service)
@@ -234,19 +233,6 @@ func Benchmark(b *testing.B) {
 		db.Exec("delete from a")
 	}
 	assert.Equal(b, 0, len(server.refs))
-}
-
-func TestExpires(t *testing.T) {
-	db, _ := sql.Open("sqlrpc", serverAddr)
-	defer db.Close()
-	db.Exec("drop table if exists a")
-	db.Exec("create table a(b)")
-	db.Exec("insert into a default values")
-	rows, _ := db.Query("select * from a where b < ?", 3)
-	time.Sleep(time.Second)
-	assert.False(t, rows.Next())
-	// Rows handle should be expired.
-	require.Error(t, rows.Err())
 }
 
 func TestMaxIntTimerDuration(t *testing.T) {

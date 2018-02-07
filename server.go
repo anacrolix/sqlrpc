@@ -5,23 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"sync"
-	"time"
 )
 
 const logRefs = false
 
 type ref struct {
 	sqlObj interface{}
-	timer  *time.Timer
 }
 
 type RefId int
 
 type Server struct {
-	DB     *sql.DB
-	Expiry time.Duration
+	DB *sql.DB
 
 	mu      sync.Mutex
 	refs    map[RefId]*ref
@@ -33,13 +29,6 @@ type Server struct {
 
 func (me *Server) db() *sql.DB {
 	return me.DB
-}
-
-func (me *Server) expiry() time.Duration {
-	if me.Expiry == 0 {
-		return math.MaxInt64
-	}
-	return me.Expiry
 }
 
 func (me *Server) Refs() (ret map[RefId]interface{}) {
@@ -79,16 +68,6 @@ func (me *Server) newRef(obj interface{}, expire bool) (ret RefId) {
 	}
 	me.refs[me.nextRef] = &ref{
 		sqlObj: obj,
-		timer: time.AfterFunc(
-			me.expiry(),
-			func() func() {
-				if expire {
-					return me.expireRef(me.nextRef, obj)
-				} else {
-					return func() {}
-				}
-			}(),
-		),
 	}
 	ret = me.nextRef
 	me.nextRef++
@@ -123,7 +102,6 @@ func (me *Server) popRef(id RefId) (ret interface{}, err error) {
 		err = errBadRef
 		return
 	}
-	ref.timer.Stop()
 	ret = ref.sqlObj
 	delete(me.refs, id)
 	if logRefs {
@@ -140,7 +118,6 @@ func (me *Server) ref(id RefId) (ret interface{}, err error) {
 		err = errBadRef
 		return
 	}
-	ref.timer.Reset(me.expiry())
 	ret = ref.sqlObj
 	return
 }

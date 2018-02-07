@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"net/rpc"
-	"time"
 
 	_ "github.com/anacrolix/envpprof"
 	"github.com/anacrolix/tagflag"
@@ -41,7 +40,7 @@ func main() {
 		log.Fatalf("error opening database: %s", err)
 	}
 	db.SetMaxOpenConns(flags.DbMaxOpenConns)
-	s := sqlrpc.Server{DB: db, Expiry: time.Minute}
+	s := sqlrpc.Server{DB: db}
 	s.Service.Server = &s
 	rpc.RegisterName("SQLRPC", &s.Service)
 	rpc.HandleHTTP()
