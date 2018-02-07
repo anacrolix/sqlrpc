@@ -34,7 +34,8 @@ func init() {
 	server = &Server{
 		DB: backendDB,
 	}
-	server.Service.Server = server
+	server.Service.Refs = &server.Refs
+	server.Service.DB = backendDB
 	err = rpc.RegisterName("SQLRPC", &server.Service)
 	if err != nil {
 		log.Fatal(err)
@@ -104,7 +105,7 @@ func TestSimple(t *testing.T) {
 	}
 	ra, _ = res.RowsAffected()
 	assert.EqualValues(t, 1, ra)
-	assert.Equal(t, 0, len(server.refs))
+	assert.Equal(t, 0, len(server.Refs.GetAll()))
 }
 
 // Try variations of {Exec,Query}{,Context} with and without NamedArgs.
@@ -128,7 +129,7 @@ func TestSimpleNamedContext(t *testing.T) {
 	require.NoError(t, err)
 	ra, _ = res.RowsAffected()
 	assert.EqualValues(t, 1, ra)
-	assert.Equal(t, 0, len(server.refs))
+	assert.Equal(t, 0, server.Refs.Len())
 }
 
 func TestTransactionSingleConnection(t *testing.T) {
@@ -204,9 +205,7 @@ func TestDatabaseLocked(t *testing.T) {
 	assert.EqualValues(t, 43, b)
 	assert.Nil(t, db.Close())
 	time.Sleep(12 * time.Millisecond)
-	server.mu.Lock()
-	assert.Equal(t, 0, len(server.refs))
-	server.mu.Unlock()
+	assert.Equal(t, 0, server.Refs.Len())
 }
 
 func Benchmark(b *testing.B) {
@@ -232,7 +231,7 @@ func Benchmark(b *testing.B) {
 		rows.Close()
 		db.Exec("delete from a")
 	}
-	assert.Equal(b, 0, len(server.refs))
+	assert.Equal(b, 0, server.Refs.Len())
 }
 
 func TestMaxIntTimerDuration(t *testing.T) {

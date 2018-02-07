@@ -3,43 +3,42 @@ package sqlrpc
 import (
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 
 	"github.com/anacrolix/missinggo/slices"
+	"github.com/anacrolix/sqlrpc/refs"
 	"github.com/bradfitz/iter"
 )
 
+var errBadRef = errors.New("bad ref")
+
 type Service struct {
-	Server interface {
-		newRef(obj interface{}, expire bool) RefId
-		popRef(RefId) (interface{}, error)
-		ref(RefId) (interface{}, error)
-		releaseRef(RefId) error
-		db() *sql.DB
-	}
+	Refs *refs.Manager
+	DB   *sql.DB
 }
 
 func (me *Service) Begin(args struct{}, txId *RefId) (err error) {
-	tx, err := me.Server.db().Begin()
+	tx, err := me.DB.Begin()
 	if err != nil {
 		return
 	}
-	*txId = me.Server.newRef(tx, true)
+	*txId = me.Refs.New(tx, tx.Rollback)
 	return
 }
 
 func (me *Service) Commit(txId RefId, reply *struct{}) (err error) {
-	_tx, err := me.Server.popRef(txId)
-	if err != nil {
-		return
+	_tx := me.Refs.Pop(txId)
+	if _tx == nil {
+		return errBadRef
 	}
 	tx := _tx.(*sql.Tx)
 	return tx.Commit()
 }
 
 func (me *Service) Rollback(txId RefId, reply *struct{}) (err error) {
-	_tx, err := me.Server.popRef(txId)
-	if err != nil {
-		return
+	_tx := me.Refs.Pop(txId)
+	if _tx == nil {
+		return errBadRef
 	}
 	tx := _tx.(*sql.Tx)
 	return tx.Rollback()
@@ -50,27 +49,26 @@ func (me *Service) Prepare(args PrepareArgs, stmtRef *RefId) (err error) {
 		Prepare(string) (*sql.Stmt, error)
 	}
 	if args.InTx {
-		var sqlObj interface{}
-		sqlObj, err = me.Server.ref(args.TxId)
-		if err != nil {
-			return
+		sqlObj := me.Refs.Get(args.TxId)
+		if sqlObj == nil {
+			return errBadRef
 		}
 		ppr = sqlObj.(*sql.Tx)
 	} else {
-		ppr = me.Server.db()
+		ppr = me.DB
 	}
 	stmt, err := ppr.Prepare(args.Query)
 	if err != nil {
 		return
 	}
-	*stmtRef = me.Server.newRef(stmt, false)
+	*stmtRef = me.Refs.New(stmt, stmt.Close)
 	return
 }
 
 func (me *Service) Query(args QueryArgs, reply *RowsReply) (err error) {
-	_stmt, err := me.Server.ref(args.StmtRef)
-	if err != nil {
-		return
+	_stmt := me.Refs.Get(args.StmtRef)
+	if _stmt == nil {
+		return errBadRef
 	}
 	stmt := _stmt.(*sql.Stmt)
 	rows, err := stmt.Query(slices.ToEmptyInterface(driverNamedValuesToNamedArgs(args.Values))...)
@@ -78,14 +76,14 @@ func (me *Service) Query(args QueryArgs, reply *RowsReply) (err error) {
 		return
 	}
 	reply.Columns, err = rows.Columns()
-	reply.RowsId = me.Server.newRef(rows, true)
+	reply.RowsId = me.Refs.New(rows, rows.Close)
 	return
 }
 
 func (me *Service) RowsClose(rowsId RefId, reply *interface{}) (err error) {
-	_rows, err := me.Server.popRef(rowsId)
-	if err != nil {
-		return
+	_rows := me.Refs.Pop(rowsId)
+	if _rows == nil {
+		return errBadRef
 	}
 	rows := _rows.(*sql.Rows)
 	err = rows.Close()
@@ -100,9 +98,9 @@ func driverNamedValuesToNamedArgs(nvs []driver.NamedValue) (nas []sql.NamedArg) 
 }
 
 func (me *Service) ExecStmt(args ExecArgs, reply *ResultReply) (err error) {
-	_stmt, err := me.Server.ref(args.StmtRef)
-	if err != nil {
-		return
+	_stmt := me.Refs.Get(args.StmtRef)
+	if _stmt == nil {
+		return errBadRef
 	}
 	stmt := _stmt.(*sql.Stmt)
 	res, err := stmt.Exec(slices.ToEmptyInterface(driverNamedValuesToNamedArgs(args.Values))...)
@@ -115,9 +113,9 @@ func (me *Service) ExecStmt(args ExecArgs, reply *ResultReply) (err error) {
 }
 
 func (me *Service) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error) {
-	_rows, err := me.Server.ref(args.RowsRef)
-	if err != nil {
-		return
+	_rows := me.Refs.Get(args.RowsRef)
+	if _rows == nil {
+		return errBadRef
 	}
 	rows := _rows.(*sql.Rows)
 	reply.Values = make([]interface{}, args.NumValues)
@@ -137,6 +135,6 @@ func (me *Service) RowsNext(args RowsNextArgs, reply *RowsNextReply) (err error)
 }
 
 func (me *Service) CloseStmt(stmtRef RefId, reply *struct{}) (err error) {
-	err = me.Server.releaseRef(stmtRef)
+	me.Refs.Release(stmtRef)
 	return
 }
