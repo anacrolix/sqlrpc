@@ -5,9 +5,6 @@ import (
 	"database/sql"
 	"log"
 	"math"
-	"net"
-	"net/http"
-	"net/rpc"
 	"testing"
 	"time"
 
@@ -20,30 +17,6 @@ import (
 
 func init() {
 	log.SetFlags(log.Flags() | log.Lshortfile)
-	rpc.HandleHTTP()
-}
-
-type testServer struct {
-	*Server
-	L net.Listener
-}
-
-func (me testServer) Close() {
-	me.DB.Close()
-	me.L.Close()
-}
-
-func startServer(t testing.TB) testServer {
-	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
-	require.NoError(t, err)
-	db.SetMaxOpenConns(1)
-	server := &Server{}
-	server.Service.DB = db
-	require.NoError(t, server.RpcServer.RegisterName("SQLRPC", &server.Service))
-	l, err := net.Listen("tcp", "localhost:0")
-	require.NoError(t, err)
-	go http.Serve(l, &server.RpcServer)
-	return testServer{server, l}
 }
 
 // Shows that transactions tie up a connection. The server.DB should have a
@@ -250,5 +223,17 @@ func TestMaxIntTimerDuration(t *testing.T) {
 	require.True(t, tr.Stop())
 }
 
-func TestTimeValue(t *testing.T) {
+func TestUnregisteredValue(t *testing.T) {
+	server := startServer(t)
+	defer server.Close()
+	db := server.NewClient(t)
+	defer db.Close()
+	_, err := db.Exec("create table a(b datetime)")
+	require.NoError(t, err)
+	now := time.Now()
+	_, err = db.Exec("insert into a values(?)", now)
+	require.NoError(t, err)
+	var v time.Time
+	err = db.QueryRow("select * from a").Scan(&v)
+	require.NoError(t, err)
 }

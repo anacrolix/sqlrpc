@@ -4,11 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/gob"
 	"io"
 	"net/rpc"
+	"time"
 )
 
 func init() {
+	// time.Time is a required driver Value, I'm sure it's listed in the docs
+	// somewhere. Let's just register it to avoid any problems.
+	gob.Register(time.Time{})
 	sql.Register("sqlrpc", &rpcsqlDriver{})
 }
 
